@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>太空幸存者</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-container">
+        <div class="game-header">
+            <div class="stats">
+                <div class="stat-item">
+                    <span class="stat-label">生命值:</span>
+                    <div class="health-bar">
+                        <div class="health-fill" id="healthBar"></div>
+                    </div>
+                    <span id="healthText">100/100</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">等级:</span>
+                    <span id="level">1</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">经验:</span>
+                    <div class="exp-bar">
+                        <div class="exp-fill" id="expBar"></div>
+                    </div>
+                    <span id="expText">0/100</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">得分:</span>
+                    <span id="score">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">击杀:</span>
+                    <span id="kills">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">波次:</span>
+                    <span id="wave">1</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">坐标:</span>
+                    <span id="position">(0, 0)</span>
+                </div>
+            </div>
+        </div>
+        
+        <canvas id="gameCanvas"></canvas>
+        
+        <div class="minimap" id="minimap">
+            <canvas id="minimapCanvas" width="150" height="150"></canvas>
+        </div>
+        
+        <div class="game-over" id="gameOver">
+            <div class="game-over-content">
+                <h1>游戏结束</h1>
+                <p>最终得分: <span id="finalScore">0</span></p>
+                <p>击杀数: <span id="finalKills">0</span></p>
+                <p>存活波次: <span id="finalWave">1</span></p>
+                <p class="coin-reward">获得遗物币: <span id="coinReward">0</span> 💰</p>
+                <button class="restart-btn" id="restartBtn">返回主菜单</button>
+            </div>
+        </div>
+        
+        <div class="game-start" id="gameStart">
+            <div class="game-start-content">
+                <h1>太空幸存者</h1>
+                <p class="game-subtitle">在无尽的太空中生存下去</p>
+                
+                <div class="game-features">
+                    <div class="feature-item">
+                        <div class="feature-icon">⚔️</div>
+                        <div class="feature-text">自动射击</div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon">⚡</div>
+                        <div class="feature-text">升级强化</div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon">🌊</div>
+                        <div class="feature-text">无尽波次</div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon">🔮</div>
+                        <div class="feature-text">神秘遗物</div>
+                    </div>
+                </div>
+                
+                <div class="main-menu-buttons">
+                    <button class="start-btn" id="startBtn">开始游戏</button>
+                    <button class="rules-btn" id="rulesBtn">规则介绍</button>
+                    <button class="shop-btn" id="shopBtn">遗物商店</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="rules-screen hidden" id="rulesScreen">
+            <div class="rules-content">
+                <h1>📖 游戏规则</h1>
+                <div class="instructions">
+                    <h2>操作说明</h2>
+                    <ul>
+                        <li><strong>WASD</strong> - 移动角色（带惯性）</li>
+                        <li><strong>鼠标</strong> - 控制攻击方向</li>
+                        <li><strong>ESC</strong> - 暂停/查看属性</li>
+                    </ul>
+                    
+                    <h2>游戏玩法</h2>
+                    <ul>
+                        <li>自动发射蓝色子弹攻击敌人</li>
+                        <li>躲避敌人和子弹攻击</li>
+                        <li>拾取<strong>黄色经验</strong>升级</li>
+                        <li>拾取<strong>红色血包</strong>恢复生命</li>
+                        <li>每次升级可选择强化能力</li>
+                    </ul>
+                    
+                    <h2>敌人类型</h2>
+                    <ul>
+                        <li><strong>普通敌人</strong> - 红色方形，会发射子弹</li>
+                        <li><strong>追身怪</strong> - 土黄色胶囊，速度快，直接撞击</li>
+                        <li><strong>泰坦</strong> - 大型八边形，血厚，向八个方向发射</li>
+                    </ul>
+                    
+                    <div style="text-align: center; margin-top: 30px; padding: 20px; background: rgba(138, 43, 226, 0.2); border-radius: 10px; border: 2px solid #8A2BE2;">
+                        <p style="color: #ffd700; font-size: 18px; margin-bottom: 15px;">📊 想了解更详细的怪物属性和波次变化？</p>
+                        <a href="monster_stats.html" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #ffd700 0%, #ffa000 100%); color: #000; text-decoration: none; padding: 12px 30px; font-size: 18px; border-radius: 25px; font-weight: bold; transition: all 0.3s ease; box-shadow: 0 5px 15px rgba(255, 215, 0, 0.3);">查看怪物属性表</a>
+                    </div>
+                </div>
+                <button class="back-btn" id="backBtn">返回主菜单</button>
+            </div>
+        </div>
+        
+        <div class="level-up-screen hidden" id="levelUpScreen">
+            <div class="level-up-content">
+                <h1>🎉 升级！</h1>
+                <h2>等级 <span id="currentLevel">2</span></h2>
+                <p class="level-up-subtitle">选择一项能力强化</p>
+                <div class="upgrade-options" id="upgradeOptions">
+                    <!-- 动态生成升级选项 -->
+                </div>
+            </div>
+        </div>
+        
+        <div class="pause-screen hidden" id="pauseScreen">
+            <div class="pause-content">
+                <h1>⏸️ 游戏暂停</h1>
+                <div class="pause-stats">
+                    <h2>当前属性</h2>
+                    <div class="stats-grid">
+                        <div class="stat-row">
+                            <span class="stat-name">生命值:</span>
+                            <span class="stat-value" id="pauseHealth">100/100</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-name">攻击力:</span>
+                            <span class="stat-value" id="pauseDamage">20</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-name">移动速度:</span>
+                            <span class="stat-value" id="pauseSpeed">4.8</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-name">飞船体积:</span>
+                            <span class="stat-value" id="pauseSize">20</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-name">子弹数量:</span>
+                            <span class="stat-value" id="pauseBullets">1</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-name">防御小球:</span>
+                            <span class="stat-value" id="pauseShields">0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-name">僚机数量:</span>
+                            <span class="stat-value" id="pauseDrones">0</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="pause-upgrades">
+                    <h2>已获得升级</h2>
+                    <ul id="pauseUpgradeList">
+                        <li>暂无升级</li>
+                    </ul>
+                </div>
+                
+                <div class="pause-relics">
+                    <h2>正在生效的神秘遗物</h2>
+                    <div id="pauseRelicList" class="relic-list">
+                        <p style="color: #888;">暂无遗物</p>
+                    </div>
+                </div>
+                
+                <!-- GM指令面板 -->
+                <div class="gm-panel">
+                    <h2>🎮 GM指令面板</h2>
+                    <div class="gm-sections">
+                        <!-- 波次控制 -->
+                        <div class="gm-section">
+                            <h3>波次控制</h3>
+                            <div class="gm-controls">
+                                <label>设置波次:</label>
+                                <input type="number" id="gmWaveInput" min="1" max="100" value="1">
+                                <button class="gm-btn" id="gmSetWave">设置波次</button>
+                            </div>
+                        </div>
+                        
+                        <!-- 怪物生成 -->
+                        <div class="gm-section">
+                            <h3>怪物生成</h3>
+                            <div class="gm-controls">
+                                <label>怪物类型:</label>
+                                <select id="gmEnemyType">
+                                    <option value="normal">普通敌人</option>
+                                    <option value="chaser">追身怪</option>
+                                    <option value="titan">泰坦</option>
+                                    <option value="guardian">宝箱守卫</option>
+                                </select>
+                                <label>数量:</label>
+                                <input type="number" id="gmEnemyCount" min="1" max="50" value="5">
+                                <button class="gm-btn" id="gmSpawnEnemy">生成怪物</button>
+                            </div>
+                        </div>
+                        
+                        <!-- 玩家状态 -->
+                        <div class="gm-section">
+                            <h3>玩家状态</h3>
+                            <div class="gm-controls">
+                                <button class="gm-btn" id="gmToggleGod">切换无敌</button>
+                                <label>经验值:</label>
+                                <input type="number" id="gmExpAmount" min="0" max="1000" value="100">
+                                <button class="gm-btn" id="gmAddExp">添加经验</button>
+                            </div>
+                        </div>
+                        
+                        <!-- 物品生成 -->
+                        <div class="gm-section">
+                            <h3>物品生成</h3>
+                            <div class="gm-controls">
+                                <button class="gm-btn" id="gmSpawnTreasure">生成宝箱</button>
+                                <button class="gm-btn" id="gmSpawnHealth">生成血包</button>
+                                <label>血包数量:</label>
+                                <input type="number" id="gmHealthCount" min="1" max="20" value="5">
+                            </div>
+                        </div>
+                        
+                        <!-- 升级管理 -->
+                        <div class="gm-section">
+                            <h3>升级管理</h3>
+                            <div class="gm-controls">
+                                <select id="gmUpgradeType">
+                                    <option value="armor">装甲增强</option>
+                                    <option value="damage">火力升级</option>
+                                    <option value="speed">高速引擎</option>
+                                    <option value="multishot">多门大炮</option>
+                                    <option value="bulletsize">杀伤弹丸</option>
+                                    <option value="energyfield">能量力场</option>
+                                    <option value="bulletsplit">子弹分裂</option>
+                                    <option value="heavy">冗余装甲</option>
+                                    <option value="agile">敏捷装甲</option>
+                                    <option value="shield">反应装甲</option>
+                                    <option value="guidedweapon">制导武器</option>
+                                    <option value="drone">忠诚僚机</option>
+                                </select>
+                                <button class="gm-btn" id="gmAddUpgrade">添加升级</button>
+                                <button class="gm-btn" id="gmRemoveUpgrade">移除升级</button>
+                            </div>
+                        </div>
+                        
+                        <!-- 遗物控制 -->
+                        <div class="gm-section">
+                            <h3>遗物控制</h3>
+                            <div class="gm-controls">
+                                <select id="gmRelicType">
+                                    <option value="bulletSplit">子弹分裂</option>
+                                    <option value="gravityCapture">引力捕获</option>
+                                    <option value="advancedRepair">高级修理</option>
+                                </select>
+                                <button class="gm-btn" id="gmActivateRelic">激活遗物</button>
+                                <button class="gm-btn" id="gmDeactivateRelic">关闭遗物</button>
+                            </div>
+                        </div>
+                        
+                        <!-- 属性修改 -->
+                        <div class="gm-section">
+                            <h3>属性修改</h3>
+                            <div class="gm-controls">
+                                <label>速度:</label>
+                                <input type="number" id="gmSpeedInput" min="1" max="20" step="0.5" value="5">
+                                <label>攻击:</label>
+                                <input type="number" id="gmDamageInput" min="5" max="200" step="5" value="20">
+                                <label>体积:</label>
+                                <input type="number" id="gmSizeInput" min="10" max="100" value="20">
+                                <label>血量:</label>
+                                <input type="number" id="gmHealthInput" min="50" max="1000" step="50" value="100">
+                                <button class="gm-btn" id="gmApplyStats">应用属性</button>
+                                <button class="gm-btn" id="gmResetStats">重置属性</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <button class="resume-btn" id="resumeBtn">继续游戏 (ESC)</button>
+            </div>
+        </div>
+        
+        <div class="shop-screen hidden" id="shopScreen">
+            <div class="shop-content">
+                <div class="shop-header">
+                    <h1>💎 遗物商店</h1>
+                    <div class="coin-display">
+                        <span class="coin-label">遗物币:</span>
+                        <span class="coin-amount" id="coinAmount">0</span>
+                        <span class="coin-icon">💰</span>
+                    </div>
+                </div>
+                
+                <div class="shop-sections">
+                    <!-- 机型区域 -->
+                    <div class="shop-section">
+                        <h2>🚀 机型选择</h2>
+                        <div class="ship-grid">
+                            <div class="ship-card">
+                                <div class="ship-icon">▲</div>
+                                <div class="ship-name">三角战机</div>
+                                <div class="ship-status">敬请期待</div>
+                            </div>
+                            <div class="ship-card">
+                                <div class="ship-icon">◆</div>
+                                <div class="ship-name">菱形战机</div>
+                                <div class="ship-status">敬请期待</div>
+                            </div>
+                            <div class="ship-card">
+                                <div class="ship-icon">⬡</div>
+                                <div class="ship-name">六边战机</div>
+                                <div class="ship-status">敬请期待</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 升级区域 -->
+                    <div class="shop-section">
+                        <h2>⚡ 永久升级</h2>
+                        <div class="upgrade-grid">
+                            <div class="upgrade-item" data-upgrade="health">
+                                <div class="upgrade-header">
+                                    <span class="upgrade-icon">❤️</span>
+                                    <span class="upgrade-name">初始血量</span>
+                                </div>
+                                <div class="upgrade-info">
+                                    <span class="upgrade-level">等级: <span id="healthLevel">0</span></span>
+                                    <span class="upgrade-effect">+20 血量</span>
+                                </div>
+                                <button class="upgrade-buy-btn" data-upgrade="health">
+                                    <span class="upgrade-cost" id="healthCost">10</span> 💰
+                                </button>
+                            </div>
+                            
+                            <div class="upgrade-item" data-upgrade="speed">
+                                <div class="upgrade-header">
+                                    <span class="upgrade-icon">⚡</span>
+                                    <span class="upgrade-name">初始速度</span>
+                                </div>
+                                <div class="upgrade-info">
+                                    <span class="upgrade-level">等级: <span id="speedLevel">0</span></span>
+                                    <span class="upgrade-effect">+10% 速度</span>
+                                </div>
+                                <button class="upgrade-buy-btn" data-upgrade="speed">
+                                    <span class="upgrade-cost" id="speedCost">10</span> 💰
+                                </button>
+                            </div>
+                            
+                            <div class="upgrade-item" data-upgrade="damage">
+                                <div class="upgrade-header">
+                                    <span class="upgrade-icon">⚔️</span>
+                                    <span class="upgrade-name">初始攻击</span>
+                                </div>
+                                <div class="upgrade-info">
+                                    <span class="upgrade-level">等级: <span id="damageLevel">0</span></span>
+                                    <span class="upgrade-effect">+5 攻击</span>
+                                </div>
+                                <button class="upgrade-buy-btn" data-upgrade="damage">
+                                    <span class="upgrade-cost" id="damageCost">10</span> 💰
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 遗物区域 -->
+                    <div class="shop-section">
+                        <h2>🔮 神秘遗物</h2>
+                        <div class="relic-grid">
+                            <div class="relic-card" data-relic="bulletSplit">
+                                <div class="relic-icon">🌟</div>
+                                <div class="relic-price" data-price="1 💰"></div>
+                                <div class="relic-tooltip">
+                                    <div class="relic-name">子弹分裂</div>
+                                    <div class="relic-effect">升级时获得"子弹分裂"选项<br>子弹命中后分裂为多瓣</div>
+                                </div>
+                            </div>
+                            <div class="relic-card" data-relic="gravityCapture">
+                                <div class="relic-icon">🧲</div>
+                                <div class="relic-price" data-price="2 💰"></div>
+                                <div class="relic-tooltip">
+                                    <div class="relic-name">引力捕获</div>
+                                    <div class="relic-effect">吸收经验和血包的<br>范围增加100%</div>
+                                </div>
+                            </div>
+                            <div class="relic-card" data-relic="advancedRepair">
+                                <div class="relic-icon">💊</div>
+                                <div class="relic-price" data-price="2 💰"></div>
+                                <div class="relic-tooltip">
+                                    <div class="relic-name">高级修理</div>
+                                    <div class="relic-effect">血包掉落概率+5%<br>血包回复量提升至50%</div>
+                                </div>
+                            </div>
+                            <div class="relic-card disabled">
+                                <div class="relic-icon">🔥</div>
+                                <div class="relic-status">敬请期待</div>
+                            </div>
+                            <div class="relic-card disabled">
+                                <div class="relic-icon">❄️</div>
+                                <div class="relic-status">敬请期待</div>
+                            </div>
+                            <div class="relic-card disabled">
+                                <div class="relic-icon">⚡</div>
+                                <div class="relic-status">敬请期待</div>
+                            </div>
+                            <div class="relic-card disabled">
+                                <div class="relic-icon">🌊</div>
+                                <div class="relic-status">敬请期待</div>
+                            </div>
+                            <div class="relic-card disabled">
+                                <div class="relic-icon">🌪️</div>
+                                <div class="relic-status">敬请期待</div>
+                            </div>
+                            <div class="relic-card disabled">
+                                <div class="relic-icon">🌈</div>
+                                <div class="relic-status">敬请期待</div>
+                            </div>
+                            <div class="relic-card disabled">
+                                <div class="relic-icon">💎</div>
+                                <div class="relic-status">敬请期待</div>
+                            </div>
+                            <div class="relic-card disabled">
+                                <div class="relic-icon">🔱</div>
+                                <div class="relic-status">敬请期待</div>
+                            </div>
+                            <div class="relic-card disabled">
+                                <div class="relic-icon">👑</div>
+                                <div class="relic-status">敬请期待</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <button class="back-btn" id="shopBackBtn">返回主菜单</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+    
+    <footer style="text-align: center; padding: 20px; color: #666;">
+        <p>由 <a href="https://with.woa.com/" style="color: #8A2BE2;" target="_blank">with</a> 通过自然语言生成</p>
+    </footer>
+</body>
+</html>
