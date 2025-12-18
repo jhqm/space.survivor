@@ -53,6 +53,19 @@
             <canvas id="minimapCanvas" width="150" height="150"></canvas>
         </div>
         
+        <!-- 虚拟摇杆 -->
+        <div class="virtual-joystick left-joystick" id="leftJoystick">
+            <div class="joystick-base">
+                <div class="joystick-stick" id="leftStick"></div>
+            </div>
+        </div>
+        
+        <div class="virtual-joystick right-joystick" id="rightJoystick">
+            <div class="joystick-base">
+                <div class="joystick-stick" id="rightStick"></div>
+            </div>
+        </div>
+        
         <div class="game-over" id="gameOver">
             <div class="game-over-content">
                 <h1>游戏结束</h1>
@@ -93,6 +106,97 @@
                     <button class="rules-btn" id="rulesBtn">规则介绍</button>
                     <button class="shop-btn" id="shopBtn">遗物商店</button>
                 </div>
+            </div>
+        </div>
+        
+        <div class="stage-select-screen hidden" id="stageSelectScreen">
+            <div class="stage-select-content">
+                <h1>🌌 选择星系</h1>
+                <p class="stage-subtitle">征服宇宙，解锁更多星系</p>
+                
+                <div class="stage-carousel-container">
+                    <button class="carousel-btn carousel-prev" id="carouselPrev">‹</button>
+                    
+                    <div class="stage-carousel" id="stageCarousel">
+                        <div class="stage-card" data-stage="1" data-unlocked="true">
+                            <div class="stage-icon" style="background-image: url('https://zhiyan-ai-agent-with-1258344702.cos.ap-guangzhou.tencentcos.cn/with/7e89835a-de35-4ec7-98f8-44115171bb76/image_1765888689_1_1.jpg');"></div>
+                            <div class="stage-name">半人马星座</div>
+                            <div class="stage-description">新手的起点</div>
+                            <div class="stage-status unlocked">已解锁</div>
+                        </div>
+                        
+                        <div class="stage-card" data-stage="2" data-unlocked="false">
+                            <div class="stage-icon locked" style="background-image: url('https://zhiyan-ai-agent-with-1258344702.cos.ap-guangzhou.tencentcos.cn/with/838d5185-160c-4bb5-8b21-5584524f13f0/image_1765888699_1_1.jpg');"></div>
+                            <div class="stage-name">猎户座星云</div>
+                            <div class="stage-description">神秘的星云</div>
+                            <div class="stage-status locked">未解锁</div>
+                        </div>
+                        
+                        <div class="stage-card" data-stage="3" data-unlocked="false">
+                            <div class="stage-icon locked" style="background-image: url('https://zhiyan-ai-agent-with-1258344702.cos.ap-guangzhou.tencentcos.cn/with/73ae29eb-346f-4fed-b941-021c0323bfde/image_1765888706_1_3.jpg');"></div>
+                            <div class="stage-name">仙女座星系</div>
+                            <div class="stage-description">遥远的星系</div>
+                            <div class="stage-status locked">未解锁</div>
+                        </div>
+                        
+                        <div class="stage-card" data-stage="4" data-unlocked="false">
+                            <div class="stage-icon locked" style="background-image: url('https://zhiyan-ai-agent-with-1258344702.cos.ap-guangzhou.tencentcos.cn/with/3bc8b64d-5ee2-4eea-8d80-0622e13c42a0/image_1765888713_1_3.jpg');"></div>
+                            <div class="stage-name">天鹰座裂谷</div>
+                            <div class="stage-description">危险的裂谷</div>
+                            <div class="stage-status locked">未解锁</div>
+                        </div>
+                        
+                        <div class="stage-card" data-stage="5" data-unlocked="false">
+                            <div class="stage-icon locked" style="background-image: url('https://zhiyan-ai-agent-with-1258344702.cos.ap-guangzhou.tencentcos.cn/with/b94cc767-2bc7-447b-ba3c-ce23ef6ac6c4/image_1765888718_1_1.jpg');"></div>
+                            <div class="stage-name">天蝎座之心</div>
+                            <div class="stage-description">炽热的核心</div>
+                            <div class="stage-status locked">未解锁</div>
+                        </div>
+                        
+                        <div class="stage-card" data-stage="6" data-unlocked="false">
+                            <div class="stage-icon locked" style="background-image: url('https://zhiyan-ai-agent-with-1258344702.cos.ap-guangzhou.tencentcos.cn/with/7265b057-f1f6-4449-acdc-a4332d366845/image_1765888725_1_1.jpg');"></div>
+                            <div class="stage-name">双子座双星</div>
+                            <div class="stage-description">孪生的恒星</div>
+                            <div class="stage-status locked">未解锁</div>
+                        </div>
+                        
+                        <div class="stage-card" data-stage="7" data-unlocked="false">
+                            <div class="stage-icon locked" style="background-image: url('https://zhiyan-ai-agent-with-1258344702.cos.ap-guangzhou.tencentcos.cn/with/7132895a-8586-4e69-a28f-f5690964a2c3/image_1765888732_1_1.jpg');"></div>
+                            <div class="stage-name">天龙座深渊</div>
+                            <div class="stage-description">黑暗的深渊</div>
+                            <div class="stage-status locked">未解锁</div>
+                        </div>
+                        
+                        <div class="stage-card" data-stage="8" data-unlocked="false">
+                            <div class="stage-icon locked" style="background-image: url('https://zhiyan-ai-agent-with-1258344702.cos.ap-guangzhou.tencentcos.cn/with/038ae694-2c69-403b-9d21-c91adbf3771f/image_1765888740_1_3.jpg');"></div>
+                            <div class="stage-name">凤凰座火海</div>
+                            <div class="stage-description">燃烧的星域</div>
+                            <div class="stage-status locked">未解锁</div>
+                        </div>
+                        
+                        <div class="stage-card" data-stage="9" data-unlocked="false">
+                            <div class="stage-icon locked" style="background-image: url('https://zhiyan-ai-agent-with-1258344702.cos.ap-guangzhou.tencentcos.cn/with/e1951788-1af7-43bf-a7ca-569b00f54353/image_1765888746_1_1.jpg');"></div>
+                            <div class="stage-name">天琴座旋涡</div>
+                            <div class="stage-description">扭曲的时空</div>
+                            <div class="stage-status locked">未解锁</div>
+                        </div>
+                        
+                        <div class="stage-card" data-stage="10" data-unlocked="false">
+                            <div class="stage-icon locked" style="background-image: url('https://zhiyan-ai-agent-with-1258344702.cos.ap-guangzhou.tencentcos.cn/with/3220c7f5-798e-4d90-9b68-773dd296e224/image_1765888758_1_3.jpg');"></div>
+                            <div class="stage-name">宇宙之心</div>
+                            <div class="stage-description">终极挑战</div>
+                            <div class="stage-status locked">未解锁</div>
+                        </div>
+                    </div>
+                    
+                    <button class="carousel-btn carousel-next" id="carouselNext">›</button>
+                </div>
+                
+                <div class="stage-info">
+                    <p class="stage-hint">左右滑动或点击箭头选择关卡</p>
+                </div>
+                
+                <button class="back-btn" id="stageBackBtn">返回主菜单</button>
             </div>
         </div>
         
@@ -461,7 +565,7 @@
         </div>
     </div>
 
-    <script src="game.js"></script>
+    <script type="module" src="game.js"></script>
     
     <footer style="text-align: center; padding: 20px; color: #666;">
         <p>由 <a href="https://with.woa.com/" style="color: #8A2BE2;" target="_blank">with</a> 通过自然语言生成</p>

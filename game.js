@@ -83,9 +83,19 @@ class Camera {
         this.x = x;
         this.y = y;
         this.smoothing = 0.15; // 平滑跟随系数（提高到0.15，更快的跟随）
+        this.isFixed = false; // 是否固定摄像机
+        this.fixedX = 0;
+        this.fixedY = 0;
     }
 
     follow(target, bossActive = false) {
+        // 如果摄像机固定，不跟随目标
+        if (this.isFixed) {
+            this.x = this.fixedX;
+            this.y = this.fixedY;
+            return;
+        }
+        
         // 平滑跟随目标
         this.x += (target.x - this.x) * this.smoothing;
         
@@ -96,6 +106,18 @@ class Camera {
             targetY = target.y - CONFIG.canvas.height / 4;
         }
         this.y += (targetY - this.y) * this.smoothing;
+    }
+    
+    fixAt(x, y) {
+        this.isFixed = true;
+        this.fixedX = x;
+        this.fixedY = y;
+        this.x = x;
+        this.y = y;
+    }
+    
+    unfix() {
+        this.isFixed = false;
     }
 
     apply(ctx) {
@@ -640,29 +662,47 @@ class Player {
         // 减速效果
         this.slowEffect = 1; // 速度倍率，1为正常，0.5为减速50%
         this.slowEndTime = 0; // 减速效果结束时间
+        
+        // 受击反馈效果
+        this.hitEffect = {
+            active: false,
+            intensity: 0,
+            maxIntensity: 1,
+            fadeSpeed: 0.05,
+            pulseSpeed: 0.3,
+            pulsePhase: 0
+        };
     }
 
-    update(keys, mouseX, mouseY) {
+    update(keys, mouseX, mouseY, leftJoystick = null, rightJoystick = null) {
         // 计算加速度方向
         let ax = 0;
         let ay = 0;
         let isThrusting = false;
         
-        if (keys['w'] || keys['W']) {
-            ay -= this.acceleration;
-            isThrusting = true;
-        }
-        if (keys['s'] || keys['S']) {
-            ay += this.acceleration;
-            isThrusting = true;
-        }
-        if (keys['a'] || keys['A']) {
-            ax -= this.acceleration;
-            isThrusting = true;
-        }
-        if (keys['d'] || keys['D']) {
-            ax += this.acceleration;
-            isThrusting = true;
+        // 虚拟摇杆控制（优先级高于键盘）
+        if (leftJoystick && leftJoystick.active) {
+            ax = leftJoystick.deltaX * this.acceleration;
+            ay = leftJoystick.deltaY * this.acceleration;
+            isThrusting = Math.abs(leftJoystick.deltaX) > 0.1 || Math.abs(leftJoystick.deltaY) > 0.1;
+        } else {
+            // 键盘控制
+            if (keys['w'] || keys['W']) {
+                ay -= this.acceleration;
+                isThrusting = true;
+            }
+            if (keys['s'] || keys['S']) {
+                ay += this.acceleration;
+                isThrusting = true;
+            }
+            if (keys['a'] || keys['A']) {
+                ax -= this.acceleration;
+                isThrusting = true;
+            }
+            if (keys['d'] || keys['D']) {
+                ax += this.acceleration;
+                isThrusting = true;
+            }
         }
 
         // 检查减速效果是否结束
@@ -694,8 +734,14 @@ class Player {
         this.x += this.vx;
         this.y += this.vy;
 
-        // 计算朝向
-        this.angle = Math.atan2(mouseY - this.y, mouseX - this.x);
+        // 计算朝向（右摇杆优先）
+        if (rightJoystick && rightJoystick.active && (Math.abs(rightJoystick.deltaX) > 0.1 || Math.abs(rightJoystick.deltaY) > 0.1)) {
+            // 使用右摇杆方向
+            this.angle = Math.atan2(rightJoystick.deltaY, rightJoystick.deltaX);
+        } else {
+            // 使用鼠标方向
+            this.angle = Math.atan2(mouseY - this.y, mouseX - this.x);
+        }
         
         // 生成尾焰粒子效果（当有推进时）
         if (isThrusting && Math.random() > 0.3) {
@@ -743,9 +789,52 @@ class Player {
             line.life -= line.decay;
             return line.life > 0;
         });
+        
+        // 更新受击效果
+        if (this.hitEffect.active) {
+            this.hitEffect.intensity -= this.hitEffect.fadeSpeed;
+            this.hitEffect.pulsePhase += this.hitEffect.pulseSpeed;
+            
+            if (this.hitEffect.intensity <= 0) {
+                this.hitEffect.active = false;
+                this.hitEffect.intensity = 0;
+            }
+        }
     }
 
     draw(ctx) {
+        // 绘制受击反馈光晕
+        if (this.hitEffect.active && this.hitEffect.intensity > 0) {
+            ctx.save();
+            
+            // 计算脉冲效果
+            const pulse = Math.sin(this.hitEffect.pulsePhase) * 0.3 + 0.7;
+            const glowRadius = this.size * 2.5 * pulse;
+            
+            // 绘制外层光晕
+            ctx.globalAlpha = this.hitEffect.intensity * 0.4;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, glowRadius, 0, Math.PI * 2);
+            const outerGradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, glowRadius);
+            outerGradient.addColorStop(0, 'rgba(255, 50, 50, 0.8)');
+            outerGradient.addColorStop(0.5, 'rgba(255, 100, 100, 0.4)');
+            outerGradient.addColorStop(1, 'rgba(255, 50, 50, 0)');
+            ctx.fillStyle = outerGradient;
+            ctx.fill();
+            
+            // 绘制内层光晕
+            ctx.globalAlpha = this.hitEffect.intensity * 0.6;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size * 1.5, 0, Math.PI * 2);
+            const innerGradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size * 1.5);
+            innerGradient.addColorStop(0, 'rgba(255, 80, 80, 0.9)');
+            innerGradient.addColorStop(1, 'rgba(255, 50, 50, 0)');
+            ctx.fillStyle = innerGradient;
+            ctx.fill();
+            
+            ctx.restore();
+        }
+        
         // 绘制能量力场
         if (this.energyField.enabled) {
             ctx.save();
@@ -845,6 +934,11 @@ class Player {
     takeDamage(damage) {
         this.health -= damage;
         if (this.health < 0) this.health = 0;
+        
+        // 触发受击反馈效果
+        this.hitEffect.active = true;
+        this.hitEffect.intensity = this.hitEffect.maxIntensity;
+        this.hitEffect.pulsePhase = 0;
     }
     
     applySlow(slowEffect, duration) {
@@ -1326,7 +1420,7 @@ class Enemy {
 
 // 追身怪类
 class Chaser {
-    constructor(x, y, wave) {
+    constructor(x, y, wave, isBossChaser = false) {
         this.x = x;
         this.y = y;
         this.type = 'chaser';
@@ -1340,6 +1434,9 @@ class Chaser {
         // 初始速度（用于BOSS发射时的初始方向）
         this.vx = 0;
         this.vy = 0;
+        
+        // BOSS追身怪标记
+        this.isBossChaser = isBossChaser;
         
         // 受击特效
         this.hitFlash = 0;
@@ -1397,13 +1494,23 @@ class Chaser {
             const flashIntensity = this.hitFlash / this.hitFlashDuration;
             const gradient = ctx.createLinearGradient(-width/2, 0, width/2, 0);
             gradient.addColorStop(0, `rgba(255, 255, 255, ${flashIntensity})`);
-            gradient.addColorStop(0.5, `rgba(139, 90, 43, ${1 - flashIntensity * 0.5})`);
-            gradient.addColorStop(1, `rgba(101, 67, 33, ${1 - flashIntensity * 0.5})`);
+            if (this.isBossChaser) {
+                gradient.addColorStop(0.5, `rgba(255, 50, 50, ${1 - flashIntensity * 0.5})`);
+                gradient.addColorStop(1, `rgba(200, 0, 0, ${1 - flashIntensity * 0.5})`);
+            } else {
+                gradient.addColorStop(0.5, `rgba(139, 90, 43, ${1 - flashIntensity * 0.5})`);
+                gradient.addColorStop(1, `rgba(101, 67, 33, ${1 - flashIntensity * 0.5})`);
+            }
             ctx.fillStyle = gradient;
         } else {
             const gradient = ctx.createLinearGradient(-width/2, 0, width/2, 0);
-            gradient.addColorStop(0, '#8b5a2b');
-            gradient.addColorStop(1, '#654321');
+            if (this.isBossChaser) {
+                gradient.addColorStop(0, '#ff3232');
+                gradient.addColorStop(1, '#c80000');
+            } else {
+                gradient.addColorStop(0, '#8b5a2b');
+                gradient.addColorStop(1, '#654321');
+            }
             ctx.fillStyle = gradient;
         }
 
@@ -1432,7 +1539,7 @@ class Chaser {
         ctx.fillRect(barX, barY, barWidth, barHeight);
 
         const healthPercent = this.health / this.maxHealth;
-        ctx.fillStyle = '#8b5a2b';
+        ctx.fillStyle = this.isBossChaser ? '#ff3232' : '#8b5a2b';
         ctx.fillRect(barX, barY, barWidth * healthPercent, barHeight);
     }
 
@@ -2003,6 +2110,321 @@ class BossLaser {
     }
 }
 
+// BOSS战斗区域类（小行星带边框）
+class BossArena {
+    constructor(centerX, centerY, width, height) {
+        this.centerX = centerX;
+        this.centerY = centerY;
+        this.width = width;
+        this.height = height;
+        this.asteroids = [];
+        
+        // 动画状态
+        this.formationProgress = 0; // 0-1，形成进度
+        this.isForming = true; // 是否正在形成
+        this.isDissipating = false; // 是否正在消散
+        this.dissipationProgress = 0; // 0-1，消散进度
+        
+        // 生成小行星带边框
+        this.generateAsteroids();
+    }
+    
+    generateAsteroids() {
+        const asteroidSize = 30;
+        const spacing = 40;
+        
+        // 上边
+        for (let x = -this.width / 2; x <= this.width / 2; x += spacing) {
+            const targetX = this.centerX + x;
+            const targetY = this.centerY - this.height / 2;
+            const angle = Math.atan2(targetY - this.centerY, targetX - this.centerX);
+            this.asteroids.push({
+                targetX: targetX,
+                targetY: targetY,
+                x: this.centerX + Math.cos(angle) * 50, // 从中心附近开始
+                y: this.centerY + Math.sin(angle) * 50,
+                size: asteroidSize + Math.random() * 10,
+                rotation: Math.random() * Math.PI * 2,
+                rotationSpeed: (Math.random() - 0.5) * 0.02
+            });
+        }
+        
+        // 下边
+        for (let x = -this.width / 2; x <= this.width / 2; x += spacing) {
+            const targetX = this.centerX + x;
+            const targetY = this.centerY + this.height / 2;
+            const angle = Math.atan2(targetY - this.centerY, targetX - this.centerX);
+            this.asteroids.push({
+                targetX: targetX,
+                targetY: targetY,
+                x: this.centerX + Math.cos(angle) * 50,
+                y: this.centerY + Math.sin(angle) * 50,
+                size: asteroidSize + Math.random() * 10,
+                rotation: Math.random() * Math.PI * 2,
+                rotationSpeed: (Math.random() - 0.5) * 0.02
+            });
+        }
+        
+        // 左边
+        for (let y = -this.height / 2; y <= this.height / 2; y += spacing) {
+            const targetX = this.centerX - this.width / 2;
+            const targetY = this.centerY + y;
+            const angle = Math.atan2(targetY - this.centerY, targetX - this.centerX);
+            this.asteroids.push({
+                targetX: targetX,
+                targetY: targetY,
+                x: this.centerX + Math.cos(angle) * 50,
+                y: this.centerY + Math.sin(angle) * 50,
+                size: asteroidSize + Math.random() * 10,
+                rotation: Math.random() * Math.PI * 2,
+                rotationSpeed: (Math.random() - 0.5) * 0.02
+            });
+        }
+        
+        // 右边
+        for (let y = -this.height / 2; y <= this.height / 2; y += spacing) {
+            const targetX = this.centerX + this.width / 2;
+            const targetY = this.centerY + y;
+            const angle = Math.atan2(targetY - this.centerY, targetX - this.centerX);
+            this.asteroids.push({
+                targetX: targetX,
+                targetY: targetY,
+                x: this.centerX + Math.cos(angle) * 50,
+                y: this.centerY + Math.sin(angle) * 50,
+                size: asteroidSize + Math.random() * 10,
+                rotation: Math.random() * Math.PI * 2,
+                rotationSpeed: (Math.random() - 0.5) * 0.02
+            });
+        }
+    }
+    
+    update() {
+        // 更新形成动画
+        if (this.isForming && this.formationProgress < 1) {
+            this.formationProgress += 0.01; // 约1.67秒完成形成
+            if (this.formationProgress >= 1) {
+                this.formationProgress = 1;
+                this.isForming = false;
+            }
+        }
+        
+        // 更新消散动画
+        if (this.isDissipating && this.dissipationProgress < 1) {
+            this.dissipationProgress += 0.015; // 约1.1秒完成消散
+            if (this.dissipationProgress >= 1) {
+                this.dissipationProgress = 1;
+            }
+        }
+        
+        // 更新小行星位置和旋转
+        this.asteroids.forEach(asteroid => {
+            asteroid.rotation += asteroid.rotationSpeed;
+            
+            // 根据动画状态更新位置
+            if (this.isForming) {
+                // 形成动画：从中心向边缘移动
+                const progress = this.easeOutCubic(this.formationProgress);
+                asteroid.x = asteroid.x + (asteroid.targetX - asteroid.x) * progress * 0.1;
+                asteroid.y = asteroid.y + (asteroid.targetY - asteroid.y) * progress * 0.1;
+            } else if (this.isDissipating) {
+                // 消散动画：从边缘向外移动
+                const progress = this.easeInCubic(this.dissipationProgress);
+                const angle = Math.atan2(asteroid.targetY - this.centerY, asteroid.targetX - this.centerX);
+                const startX = asteroid.targetX;
+                const startY = asteroid.targetY;
+                // 向外扩散，距离增加到原来的3倍
+                const endX = this.centerX + Math.cos(angle) * (Math.sqrt(Math.pow(asteroid.targetX - this.centerX, 2) + Math.pow(asteroid.targetY - this.centerY, 2)) * 3);
+                const endY = this.centerY + Math.sin(angle) * (Math.sqrt(Math.pow(asteroid.targetX - this.centerX, 2) + Math.pow(asteroid.targetY - this.centerY, 2)) * 3);
+                asteroid.x = startX + (endX - startX) * progress;
+                asteroid.y = startY + (endY - startY) * progress;
+            } else {
+                // 正常状态：保持在目标位置
+                asteroid.x = asteroid.targetX;
+                asteroid.y = asteroid.targetY;
+            }
+        });
+    }
+    
+    // 缓动函数
+    easeOutCubic(t) {
+        return 1 - Math.pow(1 - t, 3);
+    }
+    
+    easeInCubic(t) {
+        return t * t * t;
+    }
+    
+    // 开始消散
+    startDissipation() {
+        this.isDissipating = true;
+        this.dissipationProgress = 0;
+    }
+    
+    // 检查是否完成消散
+    isFullyDissipated() {
+        return this.isDissipating && this.dissipationProgress >= 1;
+    }
+    
+    draw(ctx) {
+        this.asteroids.forEach(asteroid => {
+            ctx.save();
+            
+            // 计算透明度
+            let alpha = 1;
+            if (this.isForming) {
+                alpha = this.formationProgress;
+            } else if (this.isDissipating) {
+                alpha = 1 - this.dissipationProgress;
+            }
+            
+            ctx.globalAlpha = alpha;
+            ctx.translate(asteroid.x, asteroid.y);
+            ctx.rotate(asteroid.rotation);
+            
+            // 绘制不规则小行星
+            ctx.beginPath();
+            const points = 8;
+            for (let i = 0; i < points; i++) {
+                const angle = (Math.PI * 2 * i) / points;
+                const radius = asteroid.size * (0.7 + Math.random() * 0.3);
+                const x = Math.cos(angle) * radius;
+                const y = Math.sin(angle) * radius;
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.closePath();
+            
+            const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, asteroid.size);
+            gradient.addColorStop(0, '#8b7355');
+            gradient.addColorStop(0.5, '#6b5345');
+            gradient.addColorStop(1, '#4b3325');
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            
+            ctx.strokeStyle = '#3b2315';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            ctx.restore();
+        });
+    }
+    
+    constrainPlayer(player) {
+        const halfWidth = this.width / 2 - player.size;
+        const halfHeight = this.height / 2 - player.size;
+        
+        if (player.x < this.centerX - halfWidth) {
+            player.x = this.centerX - halfWidth;
+            player.vx = 0;
+        }
+        if (player.x > this.centerX + halfWidth) {
+            player.x = this.centerX + halfWidth;
+            player.vx = 0;
+        }
+        if (player.y < this.centerY - halfHeight) {
+            player.y = this.centerY - halfHeight;
+            player.vy = 0;
+        }
+        if (player.y > this.centerY + halfHeight) {
+            player.y = this.centerY + halfHeight;
+            player.vy = 0;
+        }
+    }
+}
+
+// BOSS胜利传送门类
+class BossVictoryPortals {
+    constructor(centerX, centerY) {
+        this.centerX = centerX;
+        this.centerY = centerY;
+        this.leftPortal = {
+            x: centerX - 200,
+            y: centerY,
+            size: 60,
+            rotation: 0,
+            label: '继续挑战'
+        };
+        this.rightPortal = {
+            x: centerX + 200,
+            y: centerY,
+            size: 60,
+            rotation: 0,
+            label: '回到菜单'
+        };
+    }
+    
+    update() {
+        this.leftPortal.rotation += 0.02;
+        this.rightPortal.rotation += 0.02;
+    }
+    
+    draw(ctx) {
+        this.drawPortal(ctx, this.leftPortal);
+        this.drawPortal(ctx, this.rightPortal);
+    }
+    
+    drawPortal(ctx, portal) {
+        ctx.save();
+        ctx.translate(portal.x, portal.y);
+        
+        // 绘制黑色核心
+        ctx.beginPath();
+        ctx.arc(0, 0, portal.size, 0, Math.PI * 2);
+        const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, portal.size);
+        gradient.addColorStop(0, '#000000');
+        gradient.addColorStop(0.7, '#1a0033');
+        gradient.addColorStop(1, '#8A2BE2');
+        ctx.fillStyle = gradient;
+        ctx.fill();
+        
+        // 绘制旋转的丝带状环绕物
+        ctx.rotate(portal.rotation);
+        for (let i = 0; i < 3; i++) {
+            const angle = (Math.PI * 2 * i) / 3;
+            ctx.save();
+            ctx.rotate(angle);
+            
+            ctx.beginPath();
+            ctx.ellipse(0, 0, portal.size * 1.3, portal.size * 0.3, 0, 0, Math.PI * 2);
+            ctx.strokeStyle = '#8A2BE2';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            
+            ctx.restore();
+        }
+        
+        ctx.restore();
+        
+        // 绘制标签
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 18px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(portal.label, portal.x, portal.y + portal.size + 30);
+    }
+    
+    checkPlayerCollision(player) {
+        const leftDist = Math.sqrt(
+            Math.pow(player.x - this.leftPortal.x, 2) + 
+            Math.pow(player.y - this.leftPortal.y, 2)
+        );
+        const rightDist = Math.sqrt(
+            Math.pow(player.x - this.rightPortal.x, 2) + 
+            Math.pow(player.y - this.rightPortal.y, 2)
+        );
+        
+        if (leftDist < this.leftPortal.size + player.size) {
+            return 'continue';
+        }
+        if (rightDist < this.rightPortal.size + player.size) {
+            return 'menu';
+        }
+        return null;
+    }
+}
+
 // BOSS类
 class Boss {
     constructor(x, y) {
@@ -2067,7 +2489,7 @@ class Boss {
         this.hitFlashDuration = 0.2;
     }
 
-    update(playerX, playerY, canvasWidth, canvasHeight, cameraX, cameraY) {
+    update(playerX, playerY, canvasWidth, canvasHeight, cameraX, cameraY, arenaCenter = null) {
         const deltaTime = 1/60;
         
         // 进场动画
@@ -2090,17 +2512,24 @@ class Boss {
             return;
         }
         
-        // 跟随屏幕上半部分居中
-        const screenCenterX = cameraX;
-        const screenTopY = cameraY - canvasHeight / 4;
+        // 如果有战斗区域中心，固定在屏幕上半部居中
+        let centerX, centerY;
+        if (arenaCenter) {
+            centerX = arenaCenter.x;
+            centerY = arenaCenter.y - canvasHeight / 4;
+        } else {
+            // 否则跟随屏幕上半部分居中
+            centerX = cameraX;
+            centerY = cameraY - canvasHeight / 4;
+        }
         
         // 摇摆效果
         this.swayTime += deltaTime;
         const swayX = Math.sin(this.swayTime * 2) * this.swayAmplitude;
         const swayY = Math.cos(this.swayTime * 1.5) * this.swayAmplitude * 0.5;
         
-        this.targetX = screenCenterX + swayX;
-        this.targetY = screenTopY + swayY;
+        this.targetX = centerX + swayX;
+        this.targetY = centerY + swayY;
         
         // 平滑移动到目标位置（除非在冲撞模式）
         if (!this.isCharging) {
@@ -2145,6 +2574,11 @@ class Boss {
         if (currentMode === 2 && !this.isLocking && !this.laserFired) {
             this.isLocking = true;
             this.lockStartTime = Date.now();
+            // 不在这里设置锁定位置，而是在绘制时实时更新
+        }
+        
+        // 如果正在锁定，实时更新锁定位置
+        if (this.isLocking && !this.laserFired) {
             this.lockTargetX = playerX;
             this.lockTargetY = playerY;
         }
@@ -2707,11 +3141,36 @@ class Game {
     constructor() {
         this.canvas = document.getElementById('gameCanvas');
         this.ctx = this.canvas.getContext('2d');
-        this.canvas.width = CONFIG.canvas.width;
-        this.canvas.height = CONFIG.canvas.height;
-
+        
+        // 移动端检测
+        this.isMobile = this.detectMobile();
+        
+        // 初始化Canvas尺寸（响应式）
+        this.resizeCanvas();
+        
         this.minimapCanvas = document.getElementById('minimapCanvas');
         this.minimapCtx = this.minimapCanvas.getContext('2d');
+        
+        // 虚拟摇杆状态
+        this.leftJoystick = {
+            active: false,
+            startX: 0,
+            startY: 0,
+            currentX: 0,
+            currentY: 0,
+            deltaX: 0,
+            deltaY: 0
+        };
+        
+        this.rightJoystick = {
+            active: false,
+            startX: 0,
+            startY: 0,
+            currentX: 0,
+            currentY: 0,
+            deltaX: 0,
+            deltaY: 0
+        };
 
         this.state = new GameState();
         this.shopSystem = new ShopSystem(); // 商店系统
@@ -2728,6 +3187,10 @@ class Game {
         this.worldMouse = { x: 0, y: 0 };
         this.lastEnemySpawn = 0;
         this.enemiesPerWave = 5;
+        
+        // 关卡系统
+        this.currentStage = 1;
+        this.unlockedStages = this.loadUnlockedStages();
 
         // 宝箱系统
         this.treasureChest = null;
@@ -2742,6 +3205,9 @@ class Game {
         this.bossShockwaves = [];
         this.bossSpawned = false;
         this.bossWave = 20;
+        this.bossArena = null; // BOSS战斗区域
+        this.bossDefeated = false; // BOSS是否被击败
+        this.bossVictoryPortals = null; // BOSS击败后的传送门
 
         // 秘籍系统（上上下下左右左右）
         this.konamiCode = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight'];
@@ -2759,7 +3225,342 @@ class Game {
         document.getElementById('gameOver').classList.add('hidden');
     }
 
+    detectMobile() {
+        // 检测是否为移动设备
+        const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+        const isMobileDevice = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent.toLowerCase());
+        const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        const isSmallScreen = window.innerWidth <= 768 || window.innerHeight <= 768;
+        
+        return isMobileDevice || (isTouchDevice && isSmallScreen);
+    }
+    
+    resizeCanvas() {
+        // PC端：保持固定尺寸
+        if (!this.isMobile) {
+            this.canvas.width = 1200;
+            this.canvas.height = 700;
+            CONFIG.canvas.width = 1200;
+            CONFIG.canvas.height = 700;
+            return;
+        }
+        
+        // 移动端：响应式适配
+        const header = document.querySelector('.game-header');
+        const isLandscape = window.innerWidth > window.innerHeight;
+        
+        let availableWidth = window.innerWidth;
+        let availableHeight = window.innerHeight;
+        
+        if (isLandscape) {
+            // 横屏时，充分利用屏幕空间
+            // 根据屏幕高度动态调整header和边距
+            let headerHeight = 70; // 默认header高度
+            let bottomMargin = 120; // 底部虚拟摇杆区域
+            
+            if (window.innerHeight < 500) {
+                // 极端横屏（高度<500px）
+                headerHeight = 55;
+                bottomMargin = 90;
+            } else if (window.innerHeight < 600) {
+                // 一般横屏（高度<600px）
+                headerHeight = 65;
+                bottomMargin = 105;
+            }
+            
+            // 计算可用高度：总高度 - header - 底部摇杆区域 - 少量边距
+            availableHeight = window.innerHeight - headerHeight - bottomMargin;
+            availableWidth = window.innerWidth - 10; // 左右各留5px边距
+            
+            // 确保Canvas不会太小
+            availableHeight = Math.max(availableHeight, 300);
+            availableWidth = Math.max(availableWidth, 500);
+            
+            this.canvas.width = Math.floor(availableWidth);
+            this.canvas.height = Math.floor(availableHeight);
+        } else {
+            // 竖屏时保持16:9比例
+            const headerHeight = header ? header.offsetHeight + 40 : 160;
+            availableWidth = window.innerWidth - 20;
+            availableHeight = window.innerHeight - headerHeight - 20;
+            
+            const targetRatio = 16 / 9;
+            const availableRatio = availableWidth / availableHeight;
+            
+            let canvasWidth, canvasHeight;
+            
+            if (availableRatio > targetRatio) {
+                canvasHeight = availableHeight;
+                canvasWidth = canvasHeight * targetRatio;
+            } else {
+                canvasWidth = availableWidth;
+                canvasHeight = canvasWidth / targetRatio;
+            }
+            
+            this.canvas.width = Math.floor(canvasWidth);
+            this.canvas.height = Math.floor(canvasHeight);
+        }
+        
+        // 更新CONFIG中的尺寸（用于游戏逻辑计算）
+        CONFIG.canvas.width = this.canvas.width;
+        CONFIG.canvas.height = this.canvas.height;
+    }
+    
+    setupVirtualJoysticks() {
+        if (!this.isMobile) return;
+        
+        // 强制横屏
+        this.forceHorizontalOrientation();
+        
+        const leftJoystick = document.getElementById('leftJoystick');
+        const rightJoystick = document.getElementById('rightJoystick');
+        const leftStick = document.getElementById('leftStick');
+        const rightStick = document.getElementById('rightStick');
+        
+        // 记录每个摇杆的触摸ID
+        this.leftJoystick.touchId = null;
+        this.rightJoystick.touchId = null;
+        
+        // 摇杆显示/隐藏定时器
+        this.leftJoystickHideTimer = null;
+        this.rightJoystickHideTimer = null;
+        
+        // 检测触摸区域并显示摇杆
+        const checkTouchArea = (e) => {
+            const screenWidth = window.innerWidth;
+            const screenHeight = window.innerHeight;
+            
+            for (let i = 0; i < e.touches.length; i++) {
+                const touch = e.touches[i];
+                const x = touch.clientX;
+                const y = touch.clientY;
+                
+                // 左侧1/3区域显示左摇杆
+                if (x < screenWidth / 3 && y > screenHeight / 3) {
+                    leftJoystick.classList.add('visible');
+                    clearTimeout(this.leftJoystickHideTimer);
+                }
+                
+                // 右侧1/3区域显示右摇杆
+                if (x > screenWidth * 2 / 3 && y > screenHeight / 3) {
+                    rightJoystick.classList.add('visible');
+                    clearTimeout(this.rightJoystickHideTimer);
+                }
+            }
+        };
+        
+        // 全局触摸监听，用于显示摇杆
+        document.addEventListener('touchstart', checkTouchArea);
+        document.addEventListener('touchmove', checkTouchArea);
+        
+        // 左摇杆（控制移动）- 支持多点触控
+        leftJoystick.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            
+            // 如果已经有触摸点，忽略
+            if (this.leftJoystick.touchId !== null) return;
+            
+            const touch = e.changedTouches[0];
+            this.leftJoystick.touchId = touch.identifier;
+            
+            const rect = leftJoystick.getBoundingClientRect();
+            this.leftJoystick.active = true;
+            this.leftJoystick.startX = rect.left + rect.width / 2;
+            this.leftJoystick.startY = rect.top + rect.height / 2;
+            leftStick.classList.add('active');
+            leftJoystick.classList.add('active');
+        }, { passive: false });
+        
+        // 右摇杆（控制攻击方向）- 支持多点触控
+        rightJoystick.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            
+            // 如果已经有触摸点，忽略
+            if (this.rightJoystick.touchId !== null) return;
+            
+            const touch = e.changedTouches[0];
+            this.rightJoystick.touchId = touch.identifier;
+            
+            const rect = rightJoystick.getBoundingClientRect();
+            this.rightJoystick.active = true;
+            this.rightJoystick.startX = rect.left + rect.width / 2;
+            this.rightJoystick.startY = rect.top + rect.height / 2;
+            rightStick.classList.add('active');
+            rightJoystick.classList.add('active');
+        }, { passive: false });
+        
+        // 统一的全局触摸移动处理
+        document.addEventListener('touchmove', (e) => {
+            let handled = false;
+            
+            // 处理所有当前的触摸点
+            for (let i = 0; i < e.touches.length; i++) {
+                const touch = e.touches[i];
+                
+                // 处理左摇杆
+                if (this.leftJoystick.active && touch.identifier === this.leftJoystick.touchId) {
+                    const rect = leftJoystick.getBoundingClientRect();
+                    const centerX = rect.left + rect.width / 2;
+                    const centerY = rect.top + rect.height / 2;
+                    
+                    let deltaX = touch.clientX - centerX;
+                    let deltaY = touch.clientY - centerY;
+                    
+                    // 限制摇杆移动范围
+                    const maxDistance = rect.width / 2 - 30;
+                    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                    
+                    if (distance > maxDistance) {
+                        const angle = Math.atan2(deltaY, deltaX);
+                        deltaX = Math.cos(angle) * maxDistance;
+                        deltaY = Math.sin(angle) * maxDistance;
+                    }
+                    
+                    // 更新摇杆位置
+                    leftStick.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+                    
+                    // 归一化到 -1 到 1 的范围
+                    this.leftJoystick.deltaX = deltaX / maxDistance;
+                    this.leftJoystick.deltaY = deltaY / maxDistance;
+                    handled = true;
+                }
+                
+                // 处理右摇杆
+                if (this.rightJoystick.active && touch.identifier === this.rightJoystick.touchId) {
+                    const rect = rightJoystick.getBoundingClientRect();
+                    const centerX = rect.left + rect.width / 2;
+                    const centerY = rect.top + rect.height / 2;
+                    
+                    let deltaX = touch.clientX - centerX;
+                    let deltaY = touch.clientY - centerY;
+                    
+                    // 限制摇杆移动范围
+                    const maxDistance = rect.width / 2 - 30;
+                    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                    
+                    if (distance > maxDistance) {
+                        const angle = Math.atan2(deltaY, deltaX);
+                        deltaX = Math.cos(angle) * maxDistance;
+                        deltaY = Math.sin(angle) * maxDistance;
+                    }
+                    
+                    // 更新摇杆位置
+                    rightStick.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+                    
+                    // 归一化到 -1 到 1 的范围
+                    this.rightJoystick.deltaX = deltaX / maxDistance;
+                    this.rightJoystick.deltaY = deltaY / maxDistance;
+                    handled = true;
+                }
+            }
+            
+            // 如果处理了摇杆事件，阻止默认行为
+            if (handled) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+        
+        // 统一的全局触摸结束处理
+        document.addEventListener('touchend', (e) => {
+            // 检查所有结束的触摸点
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
+                
+                // 检查是否是左摇杆的触摸点结束
+                if (touch.identifier === this.leftJoystick.touchId) {
+                    this.leftJoystick.active = false;
+                    this.leftJoystick.touchId = null;
+                    this.leftJoystick.deltaX = 0;
+                    this.leftJoystick.deltaY = 0;
+                    leftStick.style.transform = 'translate(-50%, -50%)';
+                    leftStick.classList.remove('active');
+                    leftJoystick.classList.remove('active');
+                    
+                    // 延迟隐藏摇杆
+                    clearTimeout(this.leftJoystickHideTimer);
+                    this.leftJoystickHideTimer = setTimeout(() => {
+                        leftJoystick.classList.remove('visible');
+                    }, 2000);
+                }
+                
+                // 检查是否是右摇杆的触摸点结束
+                if (touch.identifier === this.rightJoystick.touchId) {
+                    this.rightJoystick.active = false;
+                    this.rightJoystick.touchId = null;
+                    this.rightJoystick.deltaX = 0;
+                    this.rightJoystick.deltaY = 0;
+                    rightStick.style.transform = 'translate(-50%, -50%)';
+                    rightStick.classList.remove('active');
+                    rightJoystick.classList.remove('active');
+                    
+                    // 延迟隐藏摇杆
+                    clearTimeout(this.rightJoystickHideTimer);
+                    this.rightJoystickHideTimer = setTimeout(() => {
+                        rightJoystick.classList.remove('visible');
+                    }, 2000);
+                }
+            }
+        }, { passive: false });
+        
+        // 防止触摸事件冒泡导致页面滚动
+        leftJoystick.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+        }, { passive: false });
+        
+        rightJoystick.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+        }, { passive: false });
+    }
+    
+    forceHorizontalOrientation() {
+        // 尝试锁定横屏方向
+        if (screen.orientation && screen.orientation.lock) {
+            screen.orientation.lock('landscape').catch(err => {
+                console.log('无法锁定屏幕方向:', err);
+            });
+        }
+        
+        // 添加CSS提示用户旋转设备
+        const style = document.createElement('style');
+        style.textContent = `
+            @media (orientation: portrait) and (max-width: 768px) {
+                body::before {
+                    content: '请将设备旋转至横屏模式以获得最佳体验';
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background: rgba(0, 0, 0, 0.9);
+                    color: #fff;
+                    padding: 30px;
+                    border-radius: 15px;
+                    font-size: 20px;
+                    text-align: center;
+                    z-index: 10000;
+                    border: 3px solid #8A2BE2;
+                    box-shadow: 0 0 30px rgba(138, 43, 226, 0.6);
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
     setupEventListeners() {
+        // 初始化虚拟摇杆
+        this.setupVirtualJoysticks();
+        
+        // 窗口大小改变时重新调整Canvas尺寸
+        window.addEventListener('resize', () => {
+            this.resizeCanvas();
+        });
+        
+        // 屏幕方向改变时重新调整
+        window.addEventListener('orientationchange', () => {
+            setTimeout(() => {
+                this.resizeCanvas();
+            }, 100);
+        });
+        
         // 键盘事件
         document.addEventListener('keydown', (e) => {
             this.keys[e.key] = true;
@@ -2824,11 +3625,55 @@ class Game {
 
         // 按钮事件
         document.getElementById('startBtn').addEventListener('click', () => {
-            this.start();
+            this.showStageSelect();
         });
 
         document.getElementById('restartBtn').addEventListener('click', () => {
             this.restart();
+        });
+        
+        // 选关界面按钮
+        document.getElementById('stageBackBtn').addEventListener('click', () => {
+            document.getElementById('stageSelectScreen').classList.add('hidden');
+            document.getElementById('gameStart').classList.remove('hidden');
+        });
+        
+        // 选关卡片点击事件
+        document.querySelectorAll('.stage-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const stage = parseInt(card.getAttribute('data-stage'));
+                const unlocked = card.getAttribute('data-unlocked') === 'true';
+                if (unlocked) {
+                    this.selectStage(stage);
+                }
+            });
+        });
+        
+        // 轮播按钮
+        document.getElementById('carouselPrev').addEventListener('click', () => {
+            const carousel = document.getElementById('stageCarousel');
+            carousel.scrollBy({ left: -310, behavior: 'smooth' });
+        });
+        
+        document.getElementById('carouselNext').addEventListener('click', () => {
+            const carousel = document.getElementById('stageCarousel');
+            carousel.scrollBy({ left: 310, behavior: 'smooth' });
+        });
+        
+        // 触摸滑动支持
+        let startX = 0;
+        const carousel = document.getElementById('stageCarousel');
+        carousel.addEventListener('touchstart', (e) => {
+            startX = e.touches[0].clientX;
+        });
+        carousel.addEventListener('touchmove', (e) => {
+            if (!startX) return;
+            const currentX = e.touches[0].clientX;
+            const diff = startX - currentX;
+            if (Math.abs(diff) > 50) {
+                carousel.scrollBy({ left: diff, behavior: 'smooth' });
+                startX = 0;
+            }
         });
         
         // 规则界面按钮
@@ -3272,6 +4117,9 @@ class Game {
         this.bossLasers = [];
         this.bossShockwaves = [];
         this.bossSpawned = false;
+        this.bossArena = null;
+        this.bossDefeated = false;
+        this.bossVictoryPortals = null;
         
         // 重置摄像机
         this.camera = new Camera(0, 0);
@@ -3348,11 +4196,20 @@ class Game {
     }
 
     spawnBoss() {
+        // 创建BOSS战斗区域（单屏幕大小）
+        const arenaX = this.player.x;
+        const arenaY = this.player.y;
+        this.bossArena = new BossArena(arenaX, arenaY, CONFIG.canvas.width, CONFIG.canvas.height);
+        
+        // 固定摄像机在战斗区域中心
+        this.camera.fixAt(arenaX, arenaY);
+        
         // BOSS从屏幕上方进入
-        const bossX = this.player.x;
-        const bossY = this.player.y - 400;
+        const bossX = arenaX;
+        const bossY = arenaY - 400;
         this.boss = new Boss(bossX, bossY);
         this.bossSpawned = true;
+        this.bossDefeated = false;
         
         // 显示BOSS提示
         this.showBossPopup();
@@ -3602,7 +4459,7 @@ class Game {
         if (!this.state.isRunning || this.state.isPaused) return;
 
         // 更新玩家
-        this.player.update(this.keys, this.worldMouse.x, this.worldMouse.y);
+        this.player.update(this.keys, this.worldMouse.x, this.worldMouse.y, this.leftJoystick, this.rightJoystick);
 
         // 更新摄像机（boss存在时玩家位置在下半屏）
         this.camera.follow(this.player, this.boss !== null);
@@ -3788,17 +4645,33 @@ class Game {
             return !bullet.isOutOfBounds(this.player.x, this.player.y);
         });
 
-        // 生成敌人
+        // 生成敌人（BOSS存在或BOSS刚被击败时不生成）
         const now = Date.now();
-        if (now - this.lastEnemySpawn > CONFIG.enemy.spawnInterval) {
+        if (!this.boss && !this.bossDefeated && now - this.lastEnemySpawn > CONFIG.enemy.spawnInterval) {
             // 每波生成固定1个敌人
             this.spawnEnemy();
             this.lastEnemySpawn = now;
         }
 
+        // 更新BOSS战斗区域
+        if (this.bossArena) {
+            this.bossArena.update();
+            
+            // 如果完全消散，清除战斗区域
+            if (this.bossArena.isFullyDissipated()) {
+                this.bossArena = null;
+            } else {
+                // 限制玩家在战斗区域内（消散过程中不限制）
+                if (!this.bossArena.isDissipating) {
+                    this.bossArena.constrainPlayer(this.player);
+                }
+            }
+        }
+
         // 更新BOSS
         if (this.boss) {
-            this.boss.update(this.player.x, this.player.y, CONFIG.canvas.width, CONFIG.canvas.height, this.camera.x, this.camera.y);
+            const arenaCenter = this.bossArena ? { x: this.bossArena.centerX, y: this.bossArena.centerY } : null;
+            this.boss.update(this.player.x, this.player.y, CONFIG.canvas.width, CONFIG.canvas.height, this.camera.x, this.camera.y, arenaCenter);
             
             // BOSS冲击波更新
             const newShockwave = this.boss.updateShockwave();
@@ -3824,7 +4697,7 @@ class Game {
             // BOSS发射追身怪
             if (this.boss.shouldFireChaser()) {
                 const spawnPos = this.boss.getChaserSpawnPosition();
-                const chaser = new Chaser(spawnPos.x, spawnPos.y, this.state.wave);
+                const chaser = new Chaser(spawnPos.x, spawnPos.y, this.state.wave, true); // 标记为BOSS追身怪
                 // 给追身怪一个初始速度
                 const speed = 3;
                 chaser.vx = Math.cos(spawnPos.angle) * speed;
@@ -3860,10 +4733,47 @@ class Game {
                             ));
                         }
                         
+                        // 击败所有屏幕上的敌人
+                        this.enemies.forEach(enemy => {
+                            this.createParticles(enemy.x, enemy.y, '#ff5252', 10);
+                        });
+                        this.enemies = [];
+                        
+                        // 清除所有敌人子弹
+                        this.bullets = this.bullets.filter(b => b.isPlayer);
+                        
                         this.boss = null;
+                        this.bossDefeated = true;
                         this.showBossDefeatedPopup();
+                        
+                        // 创建胜利传送门
+                        this.bossVictoryPortals = new BossVictoryPortals(
+                            this.bossArena.centerX,
+                            this.bossArena.centerY
+                        );
                     }
                 }
+            }
+        }
+        
+        // 更新BOSS胜利传送门
+        if (this.bossVictoryPortals) {
+            this.bossVictoryPortals.update();
+            
+            // 检查玩家是否进入传送门
+            const portalChoice = this.bossVictoryPortals.checkPlayerCollision(this.player);
+            if (portalChoice === 'continue') {
+                // 继续挑战：解锁下一关并触发小行星边框消散动画
+                this.unlockNextStage();
+                if (this.bossArena && !this.bossArena.isDissipating) {
+                    this.bossArena.startDissipation();
+                }
+                this.bossVictoryPortals = null;
+                this.bossDefeated = false;
+                this.camera.unfix();
+            } else if (portalChoice === 'menu') {
+                // 回到菜单：结束游戏
+                this.gameOver();
             }
         }
         
@@ -4007,7 +4917,10 @@ class Game {
                         this.createParticles(deadEnemy.x, deadEnemy.y, '#ff5252', 15);
                         
                         // 掉落经验（传入当前波次和商店系统）
-                        this.experienceGems.push(new ExperienceGem(deadEnemy.x, deadEnemy.y, this.state.wave, this.shopSystem));
+                        // BOSS追身怪不掉落经验
+                        if (!deadEnemy.isBossChaser) {
+                            this.experienceGems.push(new ExperienceGem(deadEnemy.x, deadEnemy.y, this.state.wave, this.shopSystem));
+                        }
                         
                         // 血包掉落概率：基础5%，高级修理遗物+5%
                         let dropChance = CONFIG.healthPack.dropChance;
@@ -4067,8 +4980,24 @@ class Game {
                             ));
                         }
                         
+                        // 击败所有屏幕上的敌人
+                        this.enemies.forEach(enemy => {
+                            this.createParticles(enemy.x, enemy.y, '#ff5252', 10);
+                        });
+                        this.enemies = [];
+                        
+                        // 清除所有敌人子弹
+                        this.bullets = this.bullets.filter(b => b.isPlayer);
+                        
                         this.boss = null;
+                        this.bossDefeated = true;
                         this.showBossDefeatedPopup();
+                        
+                        // 创建胜利传送门
+                        this.bossVictoryPortals = new BossVictoryPortals(
+                            this.bossArena.centerX,
+                            this.bossArena.centerY
+                        );
                     } else {
                         this.createParticles(bullet.x, bullet.y, '#4dd0e1', 5);
                     }
@@ -4416,6 +5345,11 @@ class Game {
             this.treasureChest.draw(this.ctx);
         }
 
+        // 绘制BOSS战斗区域（小行星带边框）
+        if (this.bossArena) {
+            this.bossArena.draw(this.ctx);
+        }
+
         // 绘制BOSS激光（在BOSS之前，确保激光在BOSS下方）
         this.bossLasers.forEach(laser => laser.draw(this.ctx));
         
@@ -4425,6 +5359,11 @@ class Game {
         // 绘制BOSS
         if (this.boss) {
             this.boss.draw(this.ctx);
+        }
+        
+        // 绘制BOSS胜利传送门
+        if (this.bossVictoryPortals) {
+            this.bossVictoryPortals.draw(this.ctx);
         }
 
         // 绘制玩家
@@ -4485,6 +5424,113 @@ class Game {
 
         // 恢复画布状态
         this.ctx.restore();
+
+        // 绘制主屏幕宝箱指示（屏幕坐标，不受摄像机影响）
+        // BOSS战阶段不显示宝箱指示
+        if (this.treasureChest && !this.treasureChest.opened && this.player && !this.boss) {
+            const dx = this.treasureChest.x - this.player.x;
+            const dy = this.treasureChest.y - this.player.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx);
+            
+            // 计算宝箱在屏幕上的位置
+            const screenX = CONFIG.canvas.width / 2 + dx;
+            const screenY = CONFIG.canvas.height / 2 + dy;
+            
+            // 如果宝箱在屏幕外，在边缘显示指示
+            const margin = 80; // 距离屏幕边缘的距离
+            const isOffScreen = screenX < margin || screenX > CONFIG.canvas.width - margin ||
+                               screenY < margin || screenY > CONFIG.canvas.height - margin;
+            
+            if (isOffScreen) {
+                // 计算指示器在屏幕边缘的位置
+                const centerX = CONFIG.canvas.width / 2;
+                const centerY = CONFIG.canvas.height / 2;
+                
+                // 计算到屏幕边缘的距离
+                const maxDistX = centerX - margin;
+                const maxDistY = centerY - margin;
+                
+                // 计算边缘点
+                let edgeX, edgeY;
+                const absAngle = Math.abs(Math.atan2(dy, dx));
+                const screenRatio = CONFIG.canvas.height / CONFIG.canvas.width;
+                const cornerAngle = Math.atan(screenRatio);
+                
+                if (absAngle < cornerAngle || absAngle > Math.PI - cornerAngle) {
+                    // 左右边缘
+                    edgeX = dx > 0 ? CONFIG.canvas.width - margin : margin;
+                    edgeY = centerY + (edgeX - centerX) * Math.tan(angle);
+                } else {
+                    // 上下边缘
+                    edgeY = dy > 0 ? CONFIG.canvas.height - margin : margin;
+                    edgeX = centerX + (edgeY - centerY) / Math.tan(angle);
+                }
+                
+                // 绘制弧形指示器
+                this.ctx.save();
+                
+                // 计算从屏幕中心到边缘点的角度和距离
+                const indicatorAngle = Math.atan2(edgeY - centerY, edgeX - centerX);
+                const indicatorRadius = Math.sqrt(
+                    Math.pow(edgeX - centerX, 2) + Math.pow(edgeY - centerY, 2)
+                );
+                
+                // 绘制发光的弧形
+                this.ctx.strokeStyle = '#ffd700';
+                this.ctx.lineWidth = 4;
+                this.ctx.shadowBlur = 15;
+                this.ctx.shadowColor = '#ffd700';
+                this.ctx.beginPath();
+                this.ctx.arc(
+                    centerX, 
+                    centerY, 
+                    indicatorRadius, 
+                    indicatorAngle - 0.15, 
+                    indicatorAngle + 0.15
+                );
+                this.ctx.stroke();
+                
+                // 绘制箭头
+                this.ctx.fillStyle = '#ffd700';
+                this.ctx.shadowBlur = 10;
+                this.ctx.beginPath();
+                this.ctx.moveTo(edgeX, edgeY);
+                this.ctx.lineTo(
+                    edgeX - Math.cos(indicatorAngle - 0.4) * 15,
+                    edgeY - Math.sin(indicatorAngle - 0.4) * 15
+                );
+                this.ctx.lineTo(
+                    edgeX - Math.cos(indicatorAngle + 0.4) * 15,
+                    edgeY - Math.sin(indicatorAngle + 0.4) * 15
+                );
+                this.ctx.closePath();
+                this.ctx.fill();
+                
+                // 绘制距离文字
+                this.ctx.shadowBlur = 0;
+                this.ctx.fillStyle = '#ffd700';
+                this.ctx.font = 'bold 16px Arial';
+                this.ctx.textAlign = 'center';
+                this.ctx.textBaseline = 'middle';
+                
+                // 计算文字位置（在箭头内侧）
+                const textX = edgeX - Math.cos(indicatorAngle) * 30;
+                const textY = edgeY - Math.sin(indicatorAngle) * 30;
+                
+                // 绘制文字背景
+                const distanceText = Math.floor(distance).toString();
+                const textWidth = this.ctx.measureText(distanceText).width;
+                this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                this.ctx.fillRect(textX - textWidth / 2 - 5, textY - 10, textWidth + 10, 20);
+                
+                // 绘制文字
+                this.ctx.fillStyle = '#ffd700';
+                this.ctx.fillText(distanceText, textX, textY);
+                
+                this.ctx.restore();
+            }
+        }
 
         // 绘制宝箱出现提示（屏幕坐标，不受摄像机影响）
         if (this.treasurePopupTime > 0) {
@@ -5196,6 +6242,64 @@ class Game {
                 message.parentNode.removeChild(message);
             }
         }, 2000);
+    }
+    
+    // 关卡系统方法
+    loadUnlockedStages() {
+        const saved = localStorage.getItem('unlockedStages');
+        if (saved) {
+            return JSON.parse(saved);
+        }
+        return [1]; // 默认只解锁第一关
+    }
+    
+    saveUnlockedStages() {
+        localStorage.setItem('unlockedStages', JSON.stringify(this.unlockedStages));
+    }
+    
+    unlockNextStage() {
+        const nextStage = this.currentStage + 1;
+        if (nextStage <= 10 && !this.unlockedStages.includes(nextStage)) {
+            this.unlockedStages.push(nextStage);
+            this.saveUnlockedStages();
+            this.showMessage(`解锁新关卡：第${nextStage}关`, '#ffd700');
+        }
+    }
+    
+    showStageSelect() {
+        document.getElementById('gameStart').classList.add('hidden');
+        document.getElementById('stageSelectScreen').classList.remove('hidden');
+        this.updateStageSelectUI();
+    }
+    
+    updateStageSelectUI() {
+        document.querySelectorAll('.stage-card').forEach(card => {
+            const stage = parseInt(card.getAttribute('data-stage'));
+            const isUnlocked = this.unlockedStages.includes(stage);
+            
+            card.setAttribute('data-unlocked', isUnlocked);
+            
+            const icon = card.querySelector('.stage-icon');
+            const status = card.querySelector('.stage-status');
+            
+            if (isUnlocked) {
+                icon.classList.remove('locked');
+                status.classList.remove('locked');
+                status.classList.add('unlocked');
+                status.textContent = '已解锁';
+            } else {
+                icon.classList.add('locked');
+                status.classList.add('locked');
+                status.classList.remove('unlocked');
+                status.textContent = '未解锁';
+            }
+        });
+    }
+    
+    selectStage(stage) {
+        this.currentStage = stage;
+        document.getElementById('stageSelectScreen').classList.add('hidden');
+        this.start();
     }
 }
 
